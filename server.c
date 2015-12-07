@@ -3,7 +3,29 @@
 #include<sys/socket.h>
 #include<arpa/inet.h> //inet_addr
 #include<unistd.h>    //write
+#include <openssl/sha.h>	//sha1
 
+#include <openssl/hmac.h>	//base64
+#include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/buffer.h>
+
+void b64Encode(const unsigned char *input, char *buf)
+{
+    BIO *bmem, *b64;
+    BUF_MEM *bptr;
+
+    b64 = BIO_new(BIO_f_base64());
+    bmem = BIO_new(BIO_s_mem());
+    b64 = BIO_push(b64, bmem);
+    BIO_write(b64, input, SHA_DIGEST_LENGTH);
+    BIO_flush(b64);
+    BIO_get_mem_ptr(b64, &bptr);
+
+    memcpy(buf, bptr->data, bptr->length-1);	// ignore newLine char
+
+    BIO_free_all(b64);
+}
 int isAsciiArgs(char *p, int len)
 {
 	for (; len > 0; len--, p++) {
@@ -81,8 +103,23 @@ int main(int argc , char *argv[])
 		printArgs(msg+i, n, ASCII);
 	    }
 	    else if (strncmp(msg+i, "Sec-WebSocket-Key:", 18) == 0) {
+		unsigned char hashString[128] = {0};
+		unsigned char hashDigest[SHA_DIGEST_LENGTH] = {0};
+		char buf[256] = {0};
+		int j;
 		printf("**");
 		printArgs(msg+i, n, ASCII);
+		strncpy(hashString, msg+i+19, n-19);
+		strcat(hashString, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+		SHA1(hashString, strlen(hashString), hashDigest);
+		for (j = 0; j < SHA_DIGEST_LENGTH; j++) {
+		    sprintf((char*)&(buf[j*2]), "%02x", hashDigest[j]);
+		}
+		printf("\thashString: %s\n", hashString);
+		printf("\thashDigest: %s\n", buf);
+		memset(buf, 0, 256);
+		b64Encode(hashDigest, buf);
+		printf("\tb64: %s\n", buf);
 	    }
 	    else if (isAsciiArgs(msg+i, n)) {
 		printf("--");
