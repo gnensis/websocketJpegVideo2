@@ -1,4 +1,6 @@
+CC=gcc
+#CC=arm-hisiv300-linux-gcc
 all:
-	arm-hisiv300-linux-gcc server.c -o server
+	$(CC) server.c -Og -o server
 clean:
 	rm -f server
