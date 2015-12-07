@@ -89,7 +89,7 @@ int main(int argc , char *argv[])
      
     strcpy(reply, "HTTP/1.1 101 Switching Protocols\r\n");
 
-    while((read_size = recv(client_sock, msg, 1024, 0)) > 0 ) {
+    if ((read_size = recv(client_sock, msg, 1024, 0)) > 0 ) {
         //Send the message back to client
         //write(client_sock , client_message , strlen(client_message));
 	printf("client:\n%s\n", msg);
@@ -99,7 +99,7 @@ int main(int argc , char *argv[])
 	    if (strncmp(msg+i, "Upgrade:", 8) == 0 ||
 	    	strncmp(msg+i, "Connection:", 11) == 0 ||
 	    	strncmp(msg+i, "Sec-WebSocket-Protocol:", 23) == 0) {
-//		strncat(reply, msg+i, j);
+		strncat(reply, msg+i, n+2);	// include \r\n
 		printArgs(msg+i, n, ASCII);
 	    }
 	    else if (strncmp(msg+i, "Sec-WebSocket-Key:", 18) == 0) {
@@ -120,6 +120,9 @@ int main(int argc , char *argv[])
 		memset(buf, 0, 256);
 		b64Encode(hashDigest, buf);
 		printf("\tb64: %s\n", buf);
+		strcat(reply, "Sec-WebSocket-Accept:");
+		strcat(reply, buf);
+		strcat(reply, "\r\n");
 	    }
 	    else if (isAsciiArgs(msg+i, n)) {
 		printf("--");
@@ -132,7 +135,14 @@ int main(int argc , char *argv[])
 	    fflush(stdout);
 	    i += (n+2);
 	}
+	strcat(reply, "\r\n");
     }
+
+    printf("server:\n%s\n", reply);
+    send(client_sock, reply, strlen(reply), 0);
+    char test[8] = {0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x00};
+    send(client_sock, test, 7, 0);
+    getchar();
      
     if(read_size == 0) {
         perror("Client disconnected\n");
