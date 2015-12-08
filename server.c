@@ -10,6 +10,50 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 
+/* setFinBit = 1, if the FINAL packet for this message
+ * setFinBit = 0, if need other packet for this message
+ * opcode = 0, if not first packet
+ * opcode = 1, if first packet of text message
+ * opcode = 2, if first packet of blob message
+ */
+unsigned int setPacket(unsigned char *pkt, unsigned char *src, unsigned int size, int setFinBit, unsigned char opcode)
+{
+    unsigned int i;
+
+    if (setFinBit)
+	pkt[0] |= 0x80;
+    else
+	pkt[0] |= 0x00;
+    pkt[0] |= opcode;
+
+    i = 0;
+    if (size > 0xffff) {
+	pkt[1] = 0x7f;
+	for (i = 0; i < 8; i++)
+		pkt[2+i] = *(unsigned char *)(&size+i);
+    }
+    else if (size > 0x7d) {
+	pkt[1] = 0x7e;
+	for (i = 0; i < 2; i++)
+		pkt[2+i] = *(unsigned char *)(&size+i);
+    }
+    else
+	pkt[1] = *(unsigned char *)&size;
+    i += 2;
+
+    memcpy(pkt+i, src, size);
+
+    int j;
+    printf("%d packet:\n", size + i);
+    for (j = 0; j < i + size; j++) {
+	if (!(j+1 & 0xf)) printf("%02x\n", pkt[j]);
+	else if (!(j+1 & 0x3)) printf("%02x  ", pkt[j]);
+	else printf("%02x ", pkt[j]);
+    }
+    printf("\n");
+    return size + i;
+}
+
 void b64Encode(const unsigned char *input, char *buf)
 {
     BIO *bmem, *b64;
@@ -140,8 +184,17 @@ int main(int argc , char *argv[])
 
     printf("server:\n%s\n", reply);
     send(client_sock, reply, strlen(reply), 0);
-    char test[8] = {0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x00};
-    send(client_sock, test, 7, 0);
+
+#if 0
+    char test[20] = {0};
+    char tmp[] = "helloWorld";
+    unsigned int pktLen;
+    pktLen = setPacket(test, tmp, strlen(tmp), 0, 1);
+    send(client_sock, test, pktLen, 0);
+    memset(test, 0, 20);
+    pktLen = setPacket(test, tmp, strlen(tmp), 1, 0);
+    send(client_sock, test, pktLen, 0);
+#endif
     getchar();
      
     if(read_size == 0) {
