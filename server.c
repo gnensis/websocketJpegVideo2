@@ -1,8 +1,9 @@
 #include<stdio.h>
 #include<string.h>    //strlen
 #include<sys/socket.h>
+#include<sys/stat.h>
 #include<arpa/inet.h> //inet_addr
-#include<unistd.h>    //write
+#include<unistd.h>    //write, access
 #include <openssl/sha.h>	//sha1
 
 #include <openssl/hmac.h>	//base64
@@ -10,14 +11,30 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 
+#define perror printf
+unsigned int fsize(const char *filename) 
+{
+    struct stat st; 
+
+    if (stat(filename, &st) == 0) {
+	printf("%s %zu bytes\n", filename, st.st_size);
+	return st.st_size;
+    }
+    else {
+	perror("fsize(%s) error\n", filename);
+    	return -1; 
+    }
+}
+
 /* setFinBit = 1, if the FINAL packet for this message
  * setFinBit = 0, if need other packet for this message
  * opcode = 0, if not first packet
  * opcode = 1, if first packet of text message
  * opcode = 2, if first packet of blob message
  */
-unsigned int setPacket(unsigned char *pkt, unsigned char *src, unsigned int size, int setFinBit, unsigned char opcode)
+unsigned int setPacketHeader(unsigned char *pkt, unsigned long size, int setFinBit, unsigned char opcode)
 {
+    printf("%s(%lx, %d, %d)\n", __func__, size, setFinBit, opcode);
     unsigned int i;
 
     if (setFinBit)
@@ -26,32 +43,31 @@ unsigned int setPacket(unsigned char *pkt, unsigned char *src, unsigned int size
 	pkt[0] |= 0x00;
     pkt[0] |= opcode;
 
-    i = 0;
     if (size > 0xffff) {
 	pkt[1] = 0x7f;
 	for (i = 0; i < 8; i++)
-		pkt[2+i] = *(unsigned char *)(&size+i);
+		pkt[9-i] = *((unsigned char *)(&size)+i);
     }
     else if (size > 0x7d) {
 	pkt[1] = 0x7e;
 	for (i = 0; i < 2; i++)
-		pkt[2+i] = *(unsigned char *)(&size+i);
+		pkt[3-i] = *((unsigned char *)(&size)+i);
     }
-    else
+    else {
+	i = 0;
 	pkt[1] = *(unsigned char *)&size;
+    }
     i += 2;
 
-    memcpy(pkt+i, src, size);
-
     int j;
-    printf("%d packet:\n", size + i);
-    for (j = 0; j < i + size; j++) {
+    printf("%d packet header:\n", i);
+    for (j = 0; j < i; j++) {
 	if (!(j+1 & 0xf)) printf("%02x\n", pkt[j]);
 	else if (!(j+1 & 0x3)) printf("%02x  ", pkt[j]);
 	else printf("%02x ", pkt[j]);
     }
     printf("\n");
-    return size + i;
+    return i;
 }
 
 void b64Encode(const unsigned char *input, char *buf)
@@ -133,11 +149,11 @@ int main(int argc , char *argv[])
      
     strcpy(reply, "HTTP/1.1 101 Switching Protocols\r\n");
 
+    int i = 0, n = 0;
     if ((read_size = recv(client_sock, msg, 1024, 0)) > 0 ) {
         //Send the message back to client
         //write(client_sock , client_message , strlen(client_message));
 	printf("client:\n%s\n", msg);
-	int i = 0, n = 0;
 	while (i < read_size) {
 	    n = argLength(msg+i, read_size-i);
 	    if (strncmp(msg+i, "Upgrade:", 8) == 0 ||
@@ -185,6 +201,38 @@ int main(int argc , char *argv[])
     printf("server:\n%s\n", reply);
     send(client_sock, reply, strlen(reply), 0);
 
+    char fileName[128] = {0};
+    unsigned char *tmp;
+    for (i = 1; i < 10000; i++) {
+	FILE *fd;
+	unsigned int fileLen, headerLen, ret;
+	unsigned char header[20] = {0};
+        sprintf(fileName, "%s%08d.jpg", argv[1], i);
+	if (access(fileName, R_OK) == -1) {
+	    perror("Wrong fileName: %s\n", fileName);
+	    break;
+	}
+	if ((fd = fopen(fileName, "rb")) == NULL) {
+	    perror("Wrong fileName: %s\n", fileName);
+	    break;
+	}
+	fileLen = fsize(fileName);
+	headerLen = setPacketHeader(header, fileLen, 1, 2);
+	if ((tmp = malloc(headerLen + fileLen)) == NULL) {
+	    perror("malloc failed\n");
+	    break;
+	}
+	memset(tmp, 0, headerLen + fileLen);
+	memcpy(tmp, header, headerLen);
+	if ((ret = fread(tmp + headerLen, 1, fileLen, fd)) != fileLen) {
+	    perror("fread size error: %d/%d bytes\n", fileLen, ret);
+	    break;
+	}
+	send(client_sock, tmp, headerLen + fileLen, 0);
+        free(tmp);
+	fclose(fd);
+	usleep(33300);
+    }
 #if 0
     char test[20] = {0};
     char tmp[] = "helloWorld";
