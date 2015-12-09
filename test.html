@@ -1,0 +1,25 @@
+<html>
+	<body>
+		<img id="image" src="" width="640" height="480"/>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript" charset="utf-8"></script>
+		<script type="text/javascript">
+			var ws = new WebSocket("ws://172.17.10.107:9999", "chat");
+			ws.onopen = function() {
+				console.log('open');
+			};
+			ws.onmessage = function (evt) {
+				console.log(evt.data);
+				//URL.revokeObjectURL($("#image").attr("src"));
+				//$("#image").attr('src', URL.createObjectURL(evt.data));
+				var fr = new FileReader();
+				fr.onload = function () {
+				      image.src = fr.result;
+				};
+				fr.readAsDataURL(evt.data);
+			};
+			ws.onclose = function() {
+				console.log('close');
+			};
+		</script>
+	</body>
+</html>
