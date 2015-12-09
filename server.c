@@ -45,8 +45,10 @@ unsigned int setPacketHeader(unsigned char *pkt, unsigned long size, int setFinB
 
     if (size > 0xffff) {
 	pkt[1] = 0x7f;
-	for (i = 0; i < 8; i++)
-		pkt[9-i] = *((unsigned char *)(&size)+i);
+	for (i = 0; i < sizeof(size); i++)
+	    pkt[9-i] = *((unsigned char *)(&size)+i);
+	for (; i < 8; i++)
+	    pkt[9-i] = 0;
     }
     else if (size > 0x7d) {
 	pkt[1] = 0x7e;
