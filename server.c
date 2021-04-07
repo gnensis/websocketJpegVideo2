@@ -17,11 +17,11 @@ unsigned int fsize(const char *filename)
     struct stat st; 
 
     if (stat(filename, &st) == 0) {
-	printf("%s %zu bytes\n", filename, st.st_size);
-	return st.st_size;
+		printf("%s %zu bytes\n", filename, st.st_size);
+		return st.st_size;
     }
     else {
-	perror("fsize(%s) error\n", filename);
+		perror("fsize(%s) error\n", filename);
     	return -1; 
     }
 }
@@ -38,35 +38,35 @@ unsigned int setPacketHeader(unsigned char *pkt, unsigned long size, int setFinB
     unsigned int i;
 
     if (setFinBit)
-	pkt[0] |= 0x80;
+		pkt[0] |= 0x80;
     else
-	pkt[0] |= 0x00;
+		pkt[0] |= 0x00;
     pkt[0] |= opcode;
 
     if (size > 0xffff) {
-	pkt[1] = 0x7f;
-	for (i = 0; i < sizeof(size); i++)
-	    pkt[9-i] = *((unsigned char *)(&size)+i);
-	for (; i < 8; i++)
-	    pkt[9-i] = 0;
+		pkt[1] = 0x7f;
+		for (i = 0; i < sizeof(size); i++)
+	    	pkt[9-i] = *((unsigned char *)(&size)+i);
+		for (; i < 8; i++)
+	    	pkt[9-i] = 0;
     }
     else if (size > 0x7d) {
-	pkt[1] = 0x7e;
-	for (i = 0; i < 2; i++)
-		pkt[3-i] = *((unsigned char *)(&size)+i);
+		pkt[1] = 0x7e;
+		for (i = 0; i < 2; i++)
+			pkt[3-i] = *((unsigned char *)(&size)+i);
     }
     else {
-	i = 0;
-	pkt[1] = *(unsigned char *)&size;
+		i = 0;
+		pkt[1] = *(unsigned char *)&size;
     }
     i += 2;
 
     int j;
     printf("%d packet header:\n", i);
     for (j = 0; j < i; j++) {
-	if (!(j+1 & 0xf)) printf("%02x\n", pkt[j]);
-	else if (!(j+1 & 0x3)) printf("%02x  ", pkt[j]);
-	else printf("%02x ", pkt[j]);
+		if (!(j+1 & 0xf)) printf("%02x\n", pkt[j]);
+		else if (!(j+1 & 0x3)) printf("%02x  ", pkt[j]);
+		else printf("%02x ", pkt[j]);
     }
     printf("\n");
     return i;
@@ -108,7 +108,7 @@ void printArgs(char *p, int n, int type)
 {
 	for (; n > 0; n--, p++) {
 	    if (type == HEX)
-		printf("0x%x ", *p);
+			printf("0x%x ", *p);
 	    else
 	    	putchar(*p);
 	}
@@ -124,7 +124,7 @@ int main(int argc , char *argv[])
     socket_desc = socket(AF_INET , SOCK_STREAM , 0);
     if (socket_desc == -1) {
         perror("socket() err\n");
-	return 0;
+		return 0;
     }
     printf("socket created\n");
      
@@ -152,52 +152,53 @@ int main(int argc , char *argv[])
     strcpy(reply, "HTTP/1.1 101 Switching Protocols\r\n");
 
     int i = 0, n = 0;
+	int readed_file_num = 0;
     if ((read_size = recv(client_sock, msg, 1024, 0)) > 0 ) {
         //Send the message back to client
         //write(client_sock , client_message , strlen(client_message));
-	printf("client:\n%s\n", msg);
-	while (i < read_size) {
-	    n = argLength(msg+i, read_size-i);
-	    if (strncmp(msg+i, "Upgrade:", 8) == 0 ||
-	    	strncmp(msg+i, "Connection:", 11) == 0 ||
-	    	strncmp(msg+i, "Sec-WebSocket-Protocol:", 23) == 0) {
-		strncat(reply, msg+i, n+2);	// include \r\n
-		printArgs(msg+i, n, ASCII);
-	    }
-	    else if (strncmp(msg+i, "Sec-WebSocket-Key:", 18) == 0) {
-		unsigned char hashString[128] = {0};
-		unsigned char hashDigest[SHA_DIGEST_LENGTH] = {0};
-		char buf[256] = {0};
-		int j;
-		printf("**");
-		printArgs(msg+i, n, ASCII);
-		strncpy(hashString, msg+i+19, n-19);
-		strcat(hashString, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-		SHA1(hashString, strlen(hashString), hashDigest);
-		for (j = 0; j < SHA_DIGEST_LENGTH; j++) {
-		    sprintf((char*)&(buf[j*2]), "%02x", hashDigest[j]);
+		printf("client:\n%s\n", msg);
+		while (i < read_size) {
+	    	n = argLength(msg+i, read_size-i);
+	    	if (strncmp(msg+i, "Upgrade:", 8) == 0 ||
+	    		strncmp(msg+i, "Connection:", 11) == 0 ||
+	    		strncmp(msg+i, "Sec-WebSocket-Protocol:", 23) == 0) {
+				strncat(reply, msg+i, n+2);	// include \r\n
+				printArgs(msg+i, n, ASCII);
+	    	}
+	    	else if (strncmp(msg+i, "Sec-WebSocket-Key:", 18) == 0) {
+				unsigned char hashString[128] = {0};
+				unsigned char hashDigest[SHA_DIGEST_LENGTH] = {0};
+				char buf[256] = {0};
+				int j;
+				printf("**");
+				printArgs(msg+i, n, ASCII);
+				strncpy(hashString, msg+i+19, n-19);
+				strcat(hashString, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+				SHA1(hashString, strlen(hashString), hashDigest);
+				for (j = 0; j < SHA_DIGEST_LENGTH; j++) {
+		    		sprintf((char*)&(buf[j*2]), "%02x", hashDigest[j]);
+				}
+				printf("\thashString: %s\n", hashString);
+				printf("\thashDigest: %s\n", buf);
+				memset(buf, 0, 256);
+				b64Encode(hashDigest, buf);
+				printf("\tb64: %s\n", buf);
+				strcat(reply, "Sec-WebSocket-Accept:");
+				strcat(reply, buf);
+				strcat(reply, "\r\n");
+	    	}
+	    	else if (isAsciiArgs(msg+i, n)) {
+				printf("--");
+				printArgs(msg+i, n, ASCII);
+	    	}
+	    	else {
+				printf("--");
+				printArgs(msg+i, n, HEX);
+	   		}
+	    	fflush(stdout);
+	    	i += (n+2);
 		}
-		printf("\thashString: %s\n", hashString);
-		printf("\thashDigest: %s\n", buf);
-		memset(buf, 0, 256);
-		b64Encode(hashDigest, buf);
-		printf("\tb64: %s\n", buf);
-		strcat(reply, "Sec-WebSocket-Accept:");
-		strcat(reply, buf);
 		strcat(reply, "\r\n");
-	    }
-	    else if (isAsciiArgs(msg+i, n)) {
-		printf("--");
-		printArgs(msg+i, n, ASCII);
-	    }
-	    else {
-		printf("--");
-		printArgs(msg+i, n, HEX);
-	    }
-	    fflush(stdout);
-	    i += (n+2);
-	}
-	strcat(reply, "\r\n");
     }
 
     printf("server:\n%s\n", reply);
@@ -206,34 +207,42 @@ int main(int argc , char *argv[])
     char fileName[128] = {0};
     unsigned char *tmp;
     for (i = 1; i < 10000; i++) {
-	FILE *fd;
-	unsigned int fileLen, headerLen, ret;
-	unsigned char header[20] = {0};
+		FILE *fd;
+		unsigned int fileLen, headerLen, ret;
+		unsigned char header[20] = {0};
         sprintf(fileName, "%s%08d.jpg", argv[1], i);
-	if (access(fileName, R_OK) == -1) {
-	    perror("Wrong fileName: %s\n", fileName);
-	    break;
-	}
-	if ((fd = fopen(fileName, "rb")) == NULL) {
-	    perror("Wrong fileName: %s\n", fileName);
-	    break;
-	}
-	fileLen = fsize(fileName);
-	headerLen = setPacketHeader(header, fileLen, 1, 2);
-	if ((tmp = malloc(headerLen + fileLen)) == NULL) {
-	    perror("malloc failed\n");
-	    break;
-	}
-	memset(tmp, 0, headerLen + fileLen);
-	memcpy(tmp, header, headerLen);
-	if ((ret = fread(tmp + headerLen, 1, fileLen, fd)) != fileLen) {
-	    perror("fread size error: %d/%d bytes\n", fileLen, ret);
-	    break;
-	}
-	send(client_sock, tmp, headerLen + fileLen, 0);
+		if (access(fileName, R_OK) == -1) {
+	    	perror("Wrong fileName: %s\n", fileName);
+			if(readed_file_num != 0)
+			{
+				i = 0;
+				perror("Retun from file:%s%08d.jpg\n", argv[1], i);
+				continue;
+			}
+	    	break;
+		}
+
+		readed_file_num = i;
+		if ((fd = fopen(fileName, "rb")) == NULL) {
+	    	perror("Wrong fileName: %s\n", fileName);
+	    	break;
+		}
+		fileLen = fsize(fileName);
+		headerLen = setPacketHeader(header, fileLen, 1, 2);
+		if ((tmp = malloc(headerLen + fileLen)) == NULL) {
+	    	perror("malloc failed\n");
+	    	break;
+		}
+		memset(tmp, 0, headerLen + fileLen);
+		memcpy(tmp, header, headerLen);
+		if ((ret = fread(tmp + headerLen, 1, fileLen, fd)) != fileLen) {
+	    	perror("fread size error: %d/%d bytes\n", fileLen, ret);
+	    	break;
+		}
+		send(client_sock, tmp, headerLen + fileLen, 0);
         free(tmp);
-	fclose(fd);
-	usleep(33300);
+		fclose(fd);
+		usleep(33300);
     }
 #if 0
     char test[20] = {0};
@@ -245,6 +254,7 @@ int main(int argc , char *argv[])
     pktLen = setPacket(test, tmp, strlen(tmp), 1, 0);
     send(client_sock, test, pktLen, 0);
 #endif
+	printf("Press Any Key to Exit the Programe\n");
     getchar();
      
     if(read_size == 0) {
